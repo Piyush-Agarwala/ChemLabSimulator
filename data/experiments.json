@@ -145,5 +145,69 @@
       }
     ],
     "safetyInfo": "Handle all chemicals with care. NaOH is caustic and can cause burns. HCl is corrosive. Always wear safety goggles and handle glassware carefully. Work in a well-ventilated area."
+  },
+  {
+    "title": "Synthesis of Acetanilide",
+    "description": "Prepare acetanilide from aniline through acetylation reaction. Learn about amide formation, crystallization techniques, and purification methods in organic synthesis.",
+    "category": "Organic Chemistry",
+    "difficulty": "Intermediate",
+    "duration": 40,
+    "steps": 5,
+    "rating": 4.7,
+    "imageUrl": "https://images.unsplash.com/photo-1576086213369-97a306d36557?ixlib=rb-4.0.3&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=800&h=400",
+    "equipment": [
+      "250mL Round Bottom Flask",
+      "Reflux Condenser",
+      "Dropping Funnel",
+      "Magnetic Stirrer",
+      "Ice Bath",
+      "Buchner Funnel",
+      "Filter Paper",
+      "Vacuum Flask",
+      "Thermometer"
+    ],
+    "stepDetails": [
+      {
+        "id": 1,
+        "title": "Reaction Setup",
+        "description": "Place 2.0mL of aniline and 3.0mL of glacial acetic acid in a 250mL round bottom flask. Set up the reflux apparatus with condenser and ensure proper cooling water flow.",
+        "duration": "8 minutes",
+        "temperature": "Room temperature",
+        "safety": "Aniline is toxic and can be absorbed through skin. Glacial acetic acid is corrosive.",
+        "completed": false
+      },
+      {
+        "id": 2,
+        "title": "Add Acetic Anhydride",
+        "description": "Using a dropping funnel, slowly add 2.5mL of acetic anhydride dropwise to the reaction mixture while stirring. The addition should take about 5 minutes to control the exothermic reaction.",
+        "duration": "10 minutes",
+        "temperature": "60-70°C",
+        "safety": "Acetic anhydride is highly corrosive and reacts violently with water.",
+        "completed": false
+      },
+      {
+        "id": 3,
+        "title": "Crystallization",
+        "description": "Heat the reaction mixture under reflux for 15 minutes. Then cool the flask in an ice bath to induce crystallization of acetanilide. White needle-like crystals should form.",
+        "duration": "20 minutes",
+        "temperature": "0-5°C",
+        "completed": false
+      },
+      {
+        "id": 4,
+        "title": "Filtration",
+        "description": "Filter the crystallized product using vacuum filtration through a Buchner funnel. Wash the crystals with cold distilled water to remove impurities and excess acetic acid.",
+        "duration": "8 minutes",
+        "completed": false
+      },
+      {
+        "id": 5,
+        "title": "Drying and Analysis",
+        "description": "Dry the acetanilide crystals on filter paper and weigh the product. Calculate the percentage yield and determine the melting point to assess purity (expected: 114°C).",
+        "duration": "15 minutes",
+        "completed": false
+      }
+    ],
+    "safetyInfo": "This experiment involves toxic and corrosive chemicals. Aniline is carcinogenic and can be absorbed through skin. Acetic anhydride and glacial acetic acid are highly corrosive. Always work in a well-ventilated fume hood and wear appropriate PPE including gloves, safety goggles, and lab coat."
   }
 ]

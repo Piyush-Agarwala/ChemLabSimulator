@@ -1,23 +1,20 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Slider } from "@/components/ui/slider";
-import { AlertTriangle, Thermometer, Beaker, Droplets, CheckCircle, Flame, RotateCcw, Scale, Timer, Play, Pause, Square, Clock, Target, BookOpen } from "lucide-react";
+import { AlertTriangle, Thermometer, Beaker, Droplets, CheckCircle, Flame, RotateCcw, Timer, Play, Pause, Square, Clock, Target, BookOpen, Snowflake } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import FlaskComponent from "./lab-equipment/flask-component";
-import TestTubeRack from "./lab-equipment/test-tube-rack";
 import BeakerComponent from "./lab-equipment/beaker-component";
-import BurnerComponent from "./lab-equipment/burner-component";
 import ThermometerComponent from "./lab-equipment/thermometer-component";
-import StirringPlate from "./lab-equipment/stirring-plate";
-import GraduatedCylinder from "./lab-equipment/graduated-cylinder";
-import AcetanilideVirtualLab from "./acetanilide-virtual-lab";
+import DroppingFunnel from "./lab-equipment/dropping-funnel";
+import RefluxCondenser from "./lab-equipment/reflux-condenser";
+import IceBath from "./lab-equipment/ice-bath";
 import type { ExperimentStep } from "@shared/schema";
 
-interface VirtualLabProps {
+interface AcetanilideVirtualLabProps {
   step: ExperimentStep;
   onStepComplete: () => void;
   isActive: boolean;
@@ -43,7 +40,6 @@ interface Equipment {
   icon: string;
   used: boolean;
   required?: boolean;
-  position?: { x: number; y: number };
 }
 
 interface LabState {
@@ -62,66 +58,34 @@ interface LabState {
   isTimerRunning: boolean;
   checkpoints: string[];
   canProceed: boolean;
+  isDropping: boolean;
+  dropRate: number;
+  waterFlow: boolean;
+  hasIce: boolean;
+  crystalFormation: number;
 }
 
-interface Bubble {
-  id: number;
-  x: number;
-  y: number;
-  size: number;
-  opacity: number;
-  velocity: { x: number; y: number };
-}
-
-const ASPIRIN_CHEMICALS: Chemical[] = [
-  { id: "salicylic", name: "Salicylic Acid", formula: "C₇H₆O₃", amount: 2.0, unit: "g", color: "#ffffff", added: false, density: 1.44, required: true },
-  { id: "acetic", name: "Acetic Anhydride", formula: "(CH₃CO)₂O", amount: 5.0, unit: "mL", color: "#fff3cd", added: false, density: 1.08, required: true },
-  { id: "phosphoric", name: "Phosphoric Acid", formula: "H₃PO₄", amount: 3, unit: "drops", color: "#f8d7da", added: false, density: 1.69, required: true },
-  { id: "water", name: "Distilled Water", formula: "H₂O", amount: 20.0, unit: "mL", color: "#cce7ff", added: false, density: 1.0, required: false },
+const ACETANILIDE_CHEMICALS: Chemical[] = [
+  { id: "aniline", name: "Aniline", formula: "C₆H₅NH₂", amount: 2.0, unit: "mL", color: "#8B4513", added: false, density: 1.02, required: true },
+  { id: "glacial_acetic", name: "Glacial Acetic Acid", formula: "CH₃COOH", amount: 3.0, unit: "mL", color: "#F0F8FF", added: false, density: 1.05, required: true },
+  { id: "acetic_anhydride", name: "Acetic Anhydride", formula: "(CH₃CO)₂O", amount: 2.5, unit: "mL", color: "#FFFACD", added: false, density: 1.08, required: true },
+  { id: "distilled_water", name: "Distilled Water", formula: "H₂O", amount: 50.0, unit: "mL", color: "#E6F3FF", added: false, density: 1.0, required: false },
 ];
 
-const TITRATION_CHEMICALS: Chemical[] = [
-  { id: "naoh", name: "NaOH Solution", formula: "NaOH", amount: 0.1, unit: "M", color: "#e3f2fd", added: false, density: 1.04, required: true },
-  { id: "hcl", name: "HCl Solution", formula: "HCl", amount: 0.1, unit: "M", color: "#fff3e0", added: false, density: 1.02, required: true },
-  { id: "phenolphthalein", name: "Phenolphthalein", formula: "C₂₀H₁₄O₄", amount: 2, unit: "drops", color: "#fce4ec", added: false, density: 1.0, required: true },
+const ACETANILIDE_EQUIPMENT: Equipment[] = [
+  { id: "round_flask", name: "Round Bottom Flask", icon: "🧪", used: false, required: true },
+  { id: "condenser", name: "Reflux Condenser", icon: "🔬", used: false, required: true },
+  { id: "dropping_funnel", name: "Dropping Funnel", icon: "💧", used: false, required: true },
+  { id: "magnetic_stirrer", name: "Magnetic Stirrer", icon: "🔄", used: false, required: true },
+  { id: "ice_bath", name: "Ice Bath", icon: "❄️", used: false, required: false },
+  { id: "thermometer", name: "Thermometer", icon: "🌡️", used: false, required: false },
 ];
 
-const EQUIPMENT: Equipment[] = [
-  { id: "thermometer", name: "Digital Thermometer", icon: "🌡️", used: false, required: false },
-  { id: "stirrer", name: "Magnetic Stirrer", icon: "🔄", used: false, required: false },
-  { id: "heater", name: "Hot Plate", icon: "🔥", used: false, required: false },
-  { id: "timer", name: "Lab Timer", icon: "⏱️", used: false, required: false },
-];
-
-export default function EnhancedVirtualLab({ step, onStepComplete, isActive, stepNumber, totalSteps }: VirtualLabProps) {
+export default function AcetanilideVirtualLab({ step, onStepComplete, isActive, stepNumber, totalSteps }: AcetanilideVirtualLabProps) {
   const { toast } = useToast();
   
-  // Check if this is the acetanilide synthesis experiment
-  const isAcetanilideExperiment = step.title.toLowerCase().includes('acetanilide');
-  
-  // If it's acetanilide synthesis, use the specialized component
-  if (isAcetanilideExperiment) {
-    return (
-      <AcetanilideVirtualLab
-        step={step}
-        onStepComplete={onStepComplete}
-        isActive={isActive}
-        stepNumber={stepNumber}
-        totalSteps={totalSteps}
-      />
-    );
-  }
-  
-  const getChemicalsForExperiment = () => {
-    const stepTitle = step.title.toLowerCase();
-    if (stepTitle.includes('titration') || stepTitle.includes('acid') || stepTitle.includes('base')) {
-      return TITRATION_CHEMICALS;
-    }
-    return ASPIRIN_CHEMICALS;
-  };
-
-  const [chemicals, setChemicals] = useState<Chemical[]>(getChemicalsForExperiment());
-  const [equipment, setEquipment] = useState<Equipment[]>(EQUIPMENT);
+  const [chemicals, setChemicals] = useState<Chemical[]>(ACETANILIDE_CHEMICALS);
+  const [equipment, setEquipment] = useState<Equipment[]>(ACETANILIDE_EQUIPMENT);
   const [labState, setLabState] = useState<LabState>({
     temperature: 22,
     targetTemperature: 22,
@@ -137,31 +101,25 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
     timer: 0,
     isTimerRunning: false,
     checkpoints: [],
-    canProceed: false
+    canProceed: false,
+    isDropping: false,
+    dropRate: 1,
+    waterFlow: false,
+    hasIce: false,
+    crystalFormation: 0
   });
 
   const [draggedItem, setDraggedItem] = useState<{type: 'chemical' | 'equipment', id: string} | null>(null);
-  const [isStirring, setIsStirring] = useState(false);
-  const [stirringAngle, setStirringAngle] = useState(0);
-  const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [stepInstructions, setStepInstructions] = useState<string[]>([]);
   const [completedInstructions, setCompletedInstructions] = useState<boolean[]>([]);
   
   const labBenchRef = useRef<HTMLDivElement>(null);
-  const animationFrameRef = useRef<number>();
   const timerIntervalRef = useRef<NodeJS.Timeout>();
-  const bubbleIdRef = useRef(0);
 
-  // Initialize step instructions based on step content
+  // Initialize step instructions
   useEffect(() => {
     if (step) {
-      const instructions = [
-        "Read the step instructions carefully",
-        "Gather required chemicals and equipment",
-        "Follow safety protocols",
-        "Complete all required actions",
-        "Verify results before proceeding"
-      ];
+      const instructions = getStepInstructions(step.id);
       setStepInstructions(instructions);
       setCompletedInstructions(new Array(instructions.length).fill(false));
     }
@@ -186,27 +144,6 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
     };
   }, [labState.isTimerRunning]);
 
-  // Stirring animation
-  useEffect(() => {
-    if (isStirring && labState.stirringSpeed > 0) {
-      const animate = () => {
-        setStirringAngle(prev => (prev + (labState.stirringSpeed / 10)) % 360);
-        animationFrameRef.current = requestAnimationFrame(animate);
-      };
-      animationFrameRef.current = requestAnimationFrame(animate);
-    } else {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    }
-    
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, [isStirring, labState.stirringSpeed]);
-
   // Temperature control simulation
   useEffect(() => {
     const interval = setInterval(() => {
@@ -214,25 +151,33 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
         let newTemp = prev.temperature;
         
         if (prev.isHeating && newTemp < prev.targetTemperature) {
-          newTemp = Math.min(prev.targetTemperature, newTemp + 2);
+          newTemp = Math.min(prev.targetTemperature, newTemp + 1.5);
         } else if (prev.isCooling && newTemp > prev.targetTemperature) {
-          newTemp = Math.max(prev.targetTemperature, newTemp - 1);
+          newTemp = Math.max(prev.targetTemperature, newTemp - 2);
         } else if (!prev.isHeating && !prev.isCooling && newTemp > 22) {
-          newTemp = Math.max(22, newTemp - 0.5); // Natural cooling to room temperature
+          newTemp = Math.max(22, newTemp - 0.3);
         }
 
-        // Update reaction progress based on temperature and mixing
+        // Update reaction progress based on conditions
         let newProgress = prev.reactionProgress;
-        if (prev.flaskContents.length > 1 && newTemp > 60 && prev.stirringSpeed > 0) {
-          newProgress = Math.min(100, prev.reactionProgress + 1);
+        let newCrystalFormation = prev.crystalFormation;
+        
+        if (prev.flaskContents.length >= 3 && newTemp > 60 && prev.stirringSpeed > 0) {
+          newProgress = Math.min(100, prev.reactionProgress + 1.5);
+        }
+        
+        // Crystal formation during cooling
+        if (newTemp < 10 && prev.reactionProgress > 80) {
+          newCrystalFormation = Math.min(100, prev.crystalFormation + 2);
         }
 
         return {
           ...prev,
           temperature: newTemp,
           reactionProgress: newProgress,
-          isReacting: newTemp > 60 && prev.flaskContents.length > 1 && prev.stirringSpeed > 0,
-          bubbleIntensity: prev.isReacting ? Math.min(10, Math.floor(newTemp / 10)) : 0
+          crystalFormation: newCrystalFormation,
+          isReacting: newTemp > 60 && prev.flaskContents.length >= 3 && prev.stirringSpeed > 0,
+          bubbleIntensity: prev.isReacting ? Math.min(8, Math.floor(newTemp / 10)) : 0
         };
       });
     }, 500);
@@ -240,67 +185,14 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
     return () => clearInterval(interval);
   }, []);
 
-  // Bubble generation and animation
-  useEffect(() => {
-    if (labState.isReacting && labState.bubbleIntensity > 0) {
-      const generateBubbles = () => {
-        const newBubbles: Bubble[] = [];
-        for (let i = 0; i < labState.bubbleIntensity; i++) {
-          if (Math.random() < 0.3) {
-            newBubbles.push({
-              id: bubbleIdRef.current++,
-              x: 50 + Math.random() * 100,
-              y: 80,
-              size: 2 + Math.random() * 4,
-              opacity: 0.6 + Math.random() * 0.4,
-              velocity: { x: (Math.random() - 0.5) * 2, y: -1 - Math.random() * 2 }
-            });
-          }
-        }
-        setBubbles(prev => [...prev.slice(-20), ...newBubbles]);
-      };
-
-      const animateBubbles = () => {
-        setBubbles(prev => prev
-          .map(bubble => ({
-            ...bubble,
-            x: bubble.x + bubble.velocity.x,
-            y: bubble.y + bubble.velocity.y,
-            opacity: bubble.opacity - 0.01
-          }))
-          .filter(bubble => bubble.opacity > 0 && bubble.y > 0)
-        );
-      };
-
-      const bubbleInterval = setInterval(generateBubbles, 200);
-      const animateInterval = setInterval(animateBubbles, 50);
-
-      return () => {
-        clearInterval(bubbleInterval);
-        clearInterval(animateInterval);
-      };
-    }
-  }, [labState.isReacting, labState.bubbleIntensity]);
-
   // Check step completion criteria
   useEffect(() => {
     const checkCompletion = () => {
-      const requiredChemicals = chemicals.filter(c => c.required);
-      const addedRequiredChemicals = requiredChemicals.filter(c => c.added);
-      const hasRequiredEquipment = equipment.some(e => e.required && e.used);
-      
-      const completionCriteria = [
-        addedRequiredChemicals.length === requiredChemicals.length,
-        labState.reactionProgress > 50 || labState.timer > 30,
-        labState.temperature > 50 || !step.description.toLowerCase().includes('heat')
-      ];
-
-      const canProceed = completionCriteria.every(Boolean);
-      
+      const canProceed = getStepCompletionCriteria(step.id);
       setLabState(prev => ({ ...prev, canProceed, stepCompleted: canProceed }));
       
       if (canProceed && !labState.stepCompleted) {
-        addCheckpoint("Step requirements completed successfully");
+        addCheckpoint(`Step ${step.id} requirements completed successfully`);
         toast({
           title: "Step Complete!",
           description: "All requirements met. You can proceed to the next step.",
@@ -309,7 +201,76 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
     };
 
     checkCompletion();
-  }, [chemicals, equipment, labState.reactionProgress, labState.timer, labState.temperature, step.description, toast]);
+  }, [chemicals, equipment, labState.reactionProgress, labState.timer, labState.temperature, labState.crystalFormation, step.id, toast]);
+
+  const getStepInstructions = (stepId: number): string[] => {
+    switch (stepId) {
+      case 1:
+        return [
+          "Set up round bottom flask with reflux condenser",
+          "Add aniline (2.0 mL) to the flask",
+          "Add glacial acetic acid (3.0 mL)",
+          "Ensure proper cooling water flow",
+          "Start magnetic stirring"
+        ];
+      case 2:
+        return [
+          "Set up dropping funnel with acetic anhydride",
+          "Begin dropwise addition slowly",
+          "Monitor temperature (should reach 60-70°C)",
+          "Control addition rate to prevent overheating",
+          "Complete addition over 5-10 minutes"
+        ];
+      case 3:
+        return [
+          "Heat reaction mixture under reflux",
+          "Maintain temperature at 70°C for 15 minutes",
+          "Prepare ice bath for cooling",
+          "Cool reaction mixture to 0-5°C",
+          "Observe white crystal formation"
+        ];
+      case 4:
+        return [
+          "Set up vacuum filtration apparatus",
+          "Filter crystallized acetanilide",
+          "Wash crystals with cold water",
+          "Remove excess solvent",
+          "Collect pure white crystals"
+        ];
+      case 5:
+        return [
+          "Dry crystals on filter paper",
+          "Weigh the final product",
+          "Calculate percentage yield",
+          "Determine melting point",
+          "Record observations and results"
+        ];
+      default:
+        return ["Follow the step instructions carefully"];
+    }
+  };
+
+  const getStepCompletionCriteria = (stepId: number): boolean => {
+    switch (stepId) {
+      case 1:
+        return labState.flaskContents.some(c => c.id === "aniline") && 
+               labState.flaskContents.some(c => c.id === "glacial_acetic") &&
+               labState.waterFlow && labState.stirringSpeed > 0;
+      case 2:
+        return labState.flaskContents.some(c => c.id === "acetic_anhydride") &&
+               labState.temperature >= 60 && labState.isDropping;
+      case 3:
+        return labState.reactionProgress > 80 && labState.temperature < 10 && 
+               labState.crystalFormation > 50;
+      case 4:
+        return labState.crystalFormation > 80 && 
+               labState.flaskContents.some(c => c.id === "distilled_water");
+      case 5:
+        return labState.timer > 30 && labState.crystalFormation >= 100;
+      default:
+        return true;
+    }
+  };
 
   const addCheckpoint = (description: string) => {
     setLabState(prev => ({
@@ -329,14 +290,25 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
     setLabState(prev => ({
       ...prev,
       flaskContents: [...prev.flaskContents, chemical],
-      flaskColor: chemical.color !== 'transparent' ? chemical.color : prev.flaskColor
+      flaskColor: getFlaskColor([...prev.flaskContents, chemical])
     }));
 
-    addCheckpoint(`Added ${chemical.name} to flask`);
+    addCheckpoint(`Added ${chemical.name} to reaction flask`);
     toast({
       title: "Chemical Added",
       description: `${chemical.name} (${chemical.amount}${chemical.unit}) added to flask`,
     });
+  };
+
+  const getFlaskColor = (contents: Chemical[]): string => {
+    if (contents.length === 0) return 'transparent';
+    if (contents.some(c => c.id === 'aniline') && contents.some(c => c.id === 'acetic_anhydride')) {
+      return '#F5DEB3'; // Wheat color for acetanilide formation
+    }
+    if (contents.some(c => c.id === 'aniline')) {
+      return '#DEB887'; // Burlywood for aniline mixture
+    }
+    return contents[contents.length - 1].color;
   };
 
   const handleEquipmentUse = (equipmentId: string) => {
@@ -362,21 +334,46 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
   };
 
   const startHeating = () => {
-    setLabState(prev => ({ ...prev, isHeating: true, isCooling: false, targetTemperature: 85 }));
-    handleEquipmentUse('heater');
-    addCheckpoint("Started heating");
+    setLabState(prev => ({ ...prev, isHeating: true, isCooling: false, targetTemperature: 70 }));
+    handleEquipmentUse('round_flask');
+    addCheckpoint("Started heating under reflux");
   };
 
   const stopHeating = () => {
-    setLabState(prev => ({ ...prev, isHeating: false, isCooling: true, targetTemperature: 22 }));
-    addCheckpoint("Stopped heating - cooling down");
+    setLabState(prev => ({ ...prev, isHeating: false }));
+    addCheckpoint("Stopped heating");
+  };
+
+  const startCooling = () => {
+    setLabState(prev => ({ ...prev, isCooling: true, isHeating: false, targetTemperature: 5, hasIce: true }));
+    handleEquipmentUse('ice_bath');
+    addCheckpoint("Started cooling in ice bath");
   };
 
   const startStirring = (speed: number) => {
     setLabState(prev => ({ ...prev, stirringSpeed: speed }));
-    setIsStirring(speed > 0);
-    handleEquipmentUse('stirrer');
-    addCheckpoint(`${speed > 0 ? 'Started' : 'Stopped'} stirring${speed > 0 ? ` at speed ${speed}` : ''}`);
+    handleEquipmentUse('magnetic_stirrer');
+    addCheckpoint(`${speed > 0 ? 'Started' : 'Stopped'} magnetic stirring${speed > 0 ? ` at speed ${speed}` : ''}`);
+  };
+
+  const toggleDropping = () => {
+    setLabState(prev => ({ ...prev, isDropping: !prev.isDropping }));
+    if (!labState.isDropping) {
+      handleEquipmentUse('dropping_funnel');
+      addCheckpoint("Started dropwise addition of acetic anhydride");
+    } else {
+      addCheckpoint("Stopped dropwise addition");
+    }
+  };
+
+  const toggleWaterFlow = () => {
+    setLabState(prev => ({ ...prev, waterFlow: !prev.waterFlow }));
+    if (!labState.waterFlow) {
+      handleEquipmentUse('condenser');
+      addCheckpoint("Started cooling water flow");
+    } else {
+      addCheckpoint("Stopped cooling water flow");
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -387,7 +384,6 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
 
   const renderLabBench = () => (
     <div className="relative bg-gradient-to-br from-gray-50 via-blue-50 to-indigo-50 rounded-xl p-8 min-h-96 border-2 border-gray-200 shadow-inner">
-      {/* Lab Bench Surface */}
       <div 
         className="absolute inset-0 rounded-xl"
         style={{
@@ -401,123 +397,127 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
       />
       
       <div className="relative z-10 flex items-center justify-center space-x-8">
-        {/* Main Flask */}
-        <FlaskComponent
-          contents={labState.flaskContents.map((content, index) => ({
-            color: content.color,
-            level: 20,
-            name: content.name
-          }))}
-          temperature={labState.temperature}
-          isHeating={labState.isHeating}
-          bubbles={bubbles}
-          stirringAngle={stirringAngle}
-          isStirring={isStirring}
-          onDrop={() => {
-            if (draggedItem?.type === 'chemical') {
-              handleChemicalDrop(draggedItem.id);
-              setDraggedItem(null);
-            }
-          }}
-        />
-        
-        {/* Supporting Equipment */}
-        <div className="space-y-4">
-          <BeakerComponent
-            size="medium"
-            contents={labState.flaskContents.length > 2 ? {
-              color: "#e0f2fe",
-              level: 40,
-              name: "Wash Water"
-            } : undefined}
-            label="Wash"
+        {/* Main Reaction Setup */}
+        <div className="flex flex-col items-center space-y-4">
+          {/* Reflux Condenser */}
+          <RefluxCondenser
+            isActive={labState.isReacting}
+            temperature={labState.temperature}
+            waterFlow={labState.waterFlow}
+            onToggleWater={toggleWaterFlow}
+            className="scale-75"
           />
           
-          <TestTubeRack
-            testTubes={[
-              { id: "sample1", label: "S1", contents: { color: "#fef3c7", level: 30, name: "Sample" } },
-              { id: "sample2", label: "S2" },
-              { id: "sample3", label: "S3" },
-              { id: "blank", label: "Blank", contents: { color: "#f0f9ff", level: 25, name: "Control" } }
-            ]}
-            className="scale-75"
+          {/* Main Flask */}
+          <FlaskComponent
+            contents={labState.flaskContents.map((content, index) => ({
+              color: content.color,
+              level: 15,
+              name: content.name
+            }))}
+            temperature={labState.temperature}
+            isHeating={labState.isHeating}
+            bubbles={[]}
+            stirringAngle={0}
+            isStirring={labState.stirringSpeed > 0}
+            onDrop={() => {
+              if (draggedItem?.type === 'chemical') {
+                handleChemicalDrop(draggedItem.id);
+                setDraggedItem(null);
+              }
+            }}
+            className="scale-90"
           />
         </div>
         
-        {/* Lab Equipment Station */}
+        {/* Dropping Funnel */}
+        <DroppingFunnel
+          isDropping={labState.isDropping}
+          dropRate={labState.dropRate}
+          contents={chemicals.find(c => c.id === 'acetic_anhydride')?.added ? undefined : {
+            color: "#FFFACD",
+            volume: 80,
+            name: "Acetic Anhydride"
+          }}
+          onToggleDropping={toggleDropping}
+          className="scale-75"
+        />
+        
+        {/* Supporting Equipment */}
         <div className="space-y-6">
           <ThermometerComponent
             temperature={labState.temperature}
             label="Digital"
-            className="scale-90"
+            className="scale-75"
           />
           
-          <GraduatedCylinder
-            capacity={100}
-            contents={labState.flaskContents.length > 1 ? {
-              color: "#ddd6fe",
-              volume: 75,
-              name: "Solution"
+          <BeakerComponent
+            size="medium"
+            contents={labState.crystalFormation > 0 ? {
+              color: "#F5F5DC",
+              level: Math.min(60, labState.crystalFormation),
+              name: "Acetanilide Crystals"
             } : undefined}
-            accuracy="high"
-            label="100mL"
+            label="Product"
             className="scale-75"
           />
         </div>
       </div>
       
-      {/* Hot Plate */}
-      <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
-        <StirringPlate
-          isOn={labState.stirringSpeed > 0}
-          speed={labState.stirringSpeed}
-          temperature={labState.temperature}
-          isHeating={labState.isHeating}
-          onToggle={() => startStirring(labState.stirringSpeed > 0 ? 0 : 50)}
-          onSpeedChange={(speed) => startStirring(speed)}
-          onHeatToggle={() => labState.isHeating ? stopHeating() : startHeating()}
-          className="scale-75"
-        />
-      </div>
-      
-      {/* Burner (Alternative heating) */}
-      {step.description.toLowerCase().includes('flame') && (
-        <div className="absolute bottom-4 right-4">
-          <BurnerComponent
-            isOn={labState.isHeating}
-            intensity={Math.round((labState.temperature - 22) / 80 * 100)}
-            onToggle={() => labState.isHeating ? stopHeating() : startHeating()}
+      {/* Ice Bath (when cooling) */}
+      {(labState.isCooling || labState.hasIce) && (
+        <div className="absolute bottom-4 left-1/4 transform -translate-x-1/2">
+          <IceBath
+            temperature={labState.temperature}
+            hasIce={labState.hasIce}
+            onAddIce={() => setLabState(prev => ({ ...prev, hasIce: true }))}
             className="scale-75"
           />
         </div>
       )}
       
-      {/* Progress Indicator */}
-      {labState.reactionProgress > 0 && (
-        <div className="absolute top-4 right-4 bg-white rounded-lg shadow-md p-3 border">
-          <div className="text-sm font-medium mb-2 flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-            Reaction Progress
+      {/* Progress Indicators */}
+      <div className="absolute top-4 right-4 space-y-2">
+        {labState.reactionProgress > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-3 border">
+            <div className="text-sm font-medium mb-2 flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-orange-500 animate-pulse"></div>
+              Reaction Progress
+            </div>
+            <Progress value={labState.reactionProgress} className="w-32 h-2" />
+            <div className="text-xs text-gray-500 mt-1">{Math.round(labState.reactionProgress)}% Complete</div>
           </div>
-          <Progress value={labState.reactionProgress} className="w-32 h-2" />
-          <div className="text-xs text-gray-500 mt-1">{Math.round(labState.reactionProgress)}% Complete</div>
-        </div>
-      )}
+        )}
+        
+        {labState.crystalFormation > 0 && (
+          <div className="bg-white rounded-lg shadow-md p-3 border">
+            <div className="text-sm font-medium mb-2 flex items-center gap-2">
+              <Snowflake className="w-3 h-3 text-blue-500" />
+              Crystal Formation
+            </div>
+            <Progress value={labState.crystalFormation} className="w-32 h-2" />
+            <div className="text-xs text-gray-500 mt-1">{Math.round(labState.crystalFormation)}% Crystallized</div>
+          </div>
+        )}
+      </div>
     </div>
   );
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-6">
       {/* Step Progress Header */}
-      <Card className="bg-gradient-to-r from-blue-50 to-indigo-50">
+      <Card className="bg-gradient-to-r from-purple-50 to-indigo-50">
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5 text-blue-600" />
+                <Target className="h-5 w-5 text-purple-600" />
                 Step {stepNumber} of {totalSteps}: {step.title}
               </CardTitle>
               <p className="text-sm text-gray-600 mt-2">{step.description}</p>
+              <div className="mt-2 text-sm text-purple-700 font-mono">
+                C₆H₅NH₂ + (CH₃CO)₂O → C₆H₅NHCOCH₃ + CH₃COOH
+              </div>
             </div>
             <div className="text-right">
               <Badge variant={labState.canProceed ? "default" : "secondary"} className="mb-2">
@@ -536,7 +536,7 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Beaker className="h-5 w-5" />
-                Virtual Lab Bench
+                Acetanilide Synthesis Lab
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -554,12 +554,12 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm">
                 <Clock className="h-4 w-4" />
-                Lab Timer
+                Reaction Timer
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-center mb-3">
-                <div className="text-2xl font-mono font-bold text-blue-600">
+                <div className="text-2xl font-mono font-bold text-purple-600">
                   {formatTime(labState.timer)}
                 </div>
               </div>
@@ -579,19 +579,19 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
             </CardContent>
           </Card>
 
-          {/* Equipment Status */}
+          {/* Process Controls */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm">
                 <Thermometer className="h-4 w-4" />
-                Equipment Status
+                Process Control
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm">Temperature</span>
-                  <Badge variant={labState.temperature > 50 ? "destructive" : "secondary"}>
+                  <Badge variant={labState.temperature > 50 ? "destructive" : labState.temperature < 10 ? "secondary" : "default"}>
                     {Math.round(labState.temperature)}°C
                   </Badge>
                 </div>
@@ -602,9 +602,15 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
                   </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm">Heating</span>
-                  <Badge variant={labState.isHeating ? "destructive" : "secondary"}>
-                    {labState.isHeating ? "Active" : "Off"}
+                  <span className="text-sm">Water Flow</span>
+                  <Badge variant={labState.waterFlow ? "default" : "secondary"}>
+                    {labState.waterFlow ? "Active" : "Off"}
+                  </Badge>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm">Dropping</span>
+                  <Badge variant={labState.isDropping ? "default" : "secondary"}>
+                    {labState.isDropping ? "Active" : "Off"}
                   </Badge>
                 </div>
               </div>
@@ -631,11 +637,26 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
                 </Button>
                 <Button 
                   size="sm" 
+                  variant={labState.isCooling ? "secondary" : "outline"}
+                  onClick={startCooling}
+                >
+                  <Snowflake className="h-3 w-3 mr-1" />
+                  Cool
+                </Button>
+                <Button 
+                  size="sm" 
                   variant={labState.stirringSpeed > 0 ? "default" : "outline"}
-                  onClick={() => startStirring(labState.stirringSpeed > 0 ? 0 : 50)}
+                  onClick={() => startStirring(labState.stirringSpeed > 0 ? 0 : 300)}
                 >
                   <RotateCcw className="h-3 w-3 mr-1" />
                   {labState.stirringSpeed > 0 ? "Stop" : "Stir"}
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant={labState.waterFlow ? "default" : "outline"}
+                  onClick={toggleWaterFlow}
+                >
+                  💧 Water
                 </Button>
               </div>
             </CardContent>
@@ -659,7 +680,7 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
                     className={`p-2 rounded border cursor-pointer transition-all ${
                       chemical.added 
                         ? 'bg-green-50 border-green-200 cursor-not-allowed opacity-60' 
-                        : 'bg-white border-gray-200 hover:border-blue-300 hover:shadow-sm'
+                        : 'bg-white border-gray-200 hover:border-purple-300 hover:shadow-sm'
                     }`}
                   >
                     <div className="flex justify-between items-center">
@@ -681,6 +702,32 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
         </div>
       </div>
 
+      {/* Step Instructions */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <BookOpen className="h-4 w-4" />
+            Step Instructions
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {stepInstructions.map((instruction, index) => (
+              <div key={index} className="flex items-center space-x-2">
+                <div className={`w-4 h-4 rounded-full flex items-center justify-center text-xs ${
+                  completedInstructions[index] ? 'bg-green-500 text-white' : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {completedInstructions[index] ? '✓' : index + 1}
+                </div>
+                <span className={`text-sm ${completedInstructions[index] ? 'line-through text-gray-500' : 'text-gray-700'}`}>
+                  {instruction}
+                </span>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Checkpoints */}
       {labState.checkpoints.length > 0 && (
         <Card>
@@ -693,7 +740,7 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
           <CardContent>
             <div className="space-y-1 max-h-32 overflow-y-auto">
               {labState.checkpoints.map((checkpoint, index) => (
-                <div key={index} className="text-xs text-gray-600 border-l-2 border-blue-200 pl-2">
+                <div key={index} className="text-xs text-gray-600 border-l-2 border-purple-200 pl-2">
                   {checkpoint}
                 </div>
               ))}
@@ -711,7 +758,7 @@ export default function EnhancedVirtualLab({ step, onStepComplete, isActive, ste
           onClick={onStepComplete}
           disabled={!labState.canProceed}
           size="lg"
-          className="bg-green-600 hover:bg-green-700 disabled:opacity-50"
+          className="bg-purple-600 hover:bg-purple-700 disabled:opacity-50"
         >
           {labState.canProceed ? "Proceed to Next Step" : "Complete Requirements First"}
         </Button>
